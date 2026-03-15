@@ -808,6 +808,68 @@ def compress_video_to_quality(
     return result
 
 
+def convert_mov_to_mp4(
+    input_file: str,
+    status_callback: StatusCallback | None = print,
+) -> CompressionResult:
+    _validate_input_file(input_file)
+    video_info = probe_video(input_file)
+
+    input_path = Path(input_file)
+    output_file = input_path.with_suffix(".mp4")
+    if input_path.suffix.lower() == ".mp4":
+        output_file = input_path.with_name(f"{input_path.stem}_converted.mp4")
+
+    _notify(status_callback, f"動画情報: {describe_video(video_info)}")
+    _notify(status_callback, f"元ファイルサイズ: {video_info.source_size_bytes / (1024 * 1024):.2f} MB")
+    _notify(status_callback, f"出力先: {output_file}")
+
+    command = [
+        "ffmpeg",
+        "-loglevel", "error",
+        "-y",
+        "-i", str(input_path),
+        "-c:v", "libx264",
+        "-preset", "medium",
+        "-crf", "18",
+    ]
+    if video_info.has_audio:
+        command.extend(["-c:a", "aac", "-b:a", "128k"])
+    else:
+        command.append("-an")
+    command.extend(["-movflags", "+faststart", str(output_file)])
+
+    _notify(status_callback, "変換中...")
+    _emit_progress(0, "変換")
+    _run_ffmpeg_with_progress(
+        command,
+        "MOV→MP4 変換に失敗しました。",
+        video_info.duration,
+        progress_from=0,
+        progress_to=100,
+        progress_label="変換",
+    )
+
+    final_size_mb = output_file.stat().st_size / (1024 * 1024)
+    _notify(status_callback, f"変換完了: {output_file}")
+    _notify(status_callback, f"出力サイズ: {final_size_mb:.2f} MB")
+
+    result = CompressionResult(
+        output_file=str(output_file),
+        final_size_mb=final_size_mb,
+        mode="convert",
+        target_description="MOV→MP4変換",
+        remove_audio=not video_info.has_audio,
+    )
+    _emit_event(
+        "result",
+        output_file=result.output_file,
+        final_size_mb=_format_size_mb(result.final_size_mb),
+        mode=result.mode,
+    )
+    return result
+
+
 def _print_quality_profiles() -> None:
     print("利用できる画質プリセット:")
     for profile in QUALITY_PROFILES:
