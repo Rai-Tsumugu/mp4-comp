@@ -9,3 +9,6 @@ __pycache__/
 build/
 dist/
 *.spec.bak
+
+# ランタイム生成ログ
+error.log
